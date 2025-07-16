@@ -12,7 +12,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from pyquery import PyQuery as pq
 import time
-from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException
+from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException, TimeoutException
 import pandas as pd
 
 # setting for the simulated browser
@@ -59,7 +59,7 @@ for i in range(0, len(key_words)):
 
     title = []
     link = []
-    for p in range(2, 8): # crawl page 2 to page 8
+    for p in range(1, 8): # crawl page 2 to page 8
         print(p)
         time.sleep(20)
 
@@ -84,18 +84,44 @@ for i in range(0, len(key_words)):
         
     
         time.sleep(40)
-
-        # click on the next page
+        
+        # click on the next page - version 2.0
         
         try:
-            button_next = browser.find_elements(By.CLASS_NAME, "gsc-cursor-page")[p]
-            browser.execute_script("arguments[0].scrollIntoView(true);", button_next)
-            time.sleep(30)
-            button_next.click()
-        #except IndexError:
-        except (ElementClickInterceptedException, IndexError) as e:
-            print("no clickable")
+            # Wait until the button list is populated
+            WebDriverWait(browser, 60).until(
+                EC.presence_of_all_elements_located((By.CLASS_NAME, "gsc-cursor-page"))
+            )
+
+            # Get all buttons and check if p is in range
+            buttons = browser.find_elements(By.CLASS_NAME, "gsc-cursor-page")
+            if p >= len(buttons):
+                print("Index out of range")
+                break
+
+            button_next = buttons[p]
+
+            # Wait until it's clickable
+            WebDriverWait(browser, 10).until(EC.element_to_be_clickable(button_next))
+
+            # Scroll to it
+            browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", button_next)
+
+            # Short sleep for layout stabilizing (1–2s is usually enough)
+            time.sleep(10)
+
+            # Try clicking
+            try:
+                button_next.click()
+            except ElementClickInterceptedException:
+                # Try JS click as fallback
+                browser.execute_script("arguments[0].click();", button_next)
+
+        except (TimeoutException, IndexError) as e:
+            print("no clickable:", e)
             break
+        
+        
     time.sleep(60)
     browser.close()
     file_name = '/Users/sheng/Library/CloudStorage/OneDrive-Personal/project/webcrawl/web_1_' + key_words[i] + '.csv'
